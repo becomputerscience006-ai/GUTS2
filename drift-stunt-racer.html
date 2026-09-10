@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Ridgeline — Drift & Stunt Driver</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --sky-top:#c7d1d8;
+    --sky-bottom:#eef1f3;
+    --panel-bg:rgba(24,26,28,0.72);
+    --ink:#eceff1;
+    --ink-dim:#9aa4ab;
+    --accent:#b0483a;
+    --accent-2:#5b7a8c;
+    --danger:#c0392b;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#111;font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;}
+  #wrap{position:relative;width:100%;height:100vh;min-height:420px;overflow:hidden;user-select:none;}
+  canvas{display:block;width:100%;height:100%;touch-action:none;}
+
+  #hud{
+    position:absolute; top:14px; left:14px;
+    background:var(--panel-bg);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px;
+    padding:10px 16px;
+    color:var(--ink);
+    display:flex; gap:20px;
+    backdrop-filter:blur(6px);
+    pointer-events:none;
+  }
+  .stat{display:flex;flex-direction:column;gap:2px;min-width:52px;}
+  .stat .label{font-size:10px;color:var(--ink-dim);letter-spacing:0.02em;}
+  .stat .value{font-family:'JetBrains Mono',monospace;font-size:17px;font-weight:500;}
+
+  #title{
+    position:absolute; top:14px; right:14px;
+    color:var(--ink); background:var(--panel-bg);
+    border:1px solid rgba(255,255,255,0.08);
+    border-radius:10px; padding:8px 14px;
+    font-size:12px; letter-spacing:0.02em; color:var(--ink-dim);
+    pointer-events:none;
+  }
+  #title b{color:var(--ink); font-weight:600;}
+
+  #toastLayer{
+    position:absolute; left:0; right:0; top:70px;
+    display:flex; justify-content:center; pointer-events:none;
+  }
+  .toast{
+    font-family:'JetBrains Mono',monospace; font-size:15px; font-weight:700;
+    color:var(--accent); background:var(--panel-bg); border:1px solid rgba(255,255,255,0.08);
+    padding:6px 14px; border-radius:8px; opacity:0; transform:translateY(-6px);
+    animation:toastIn 1.6s ease forwards;
+  }
+  @keyframes toastIn{
+    0%{opacity:0; transform:translateY(-6px);}
+    12%{opacity:1; transform:translateY(0);}
+    75%{opacity:1;}
+    100%{opacity:0; transform:translateY(-10px);}
+  }
+
+  #controls{
+    position:absolute; left:0; right:0; bottom:0; height:150px;
+    display:flex; justify-content:space-between; align-items:flex-end;
+    padding:0 16px 18px; pointer-events:none;
+  }
+  .btnCluster{display:flex; gap:10px; align-items:flex-end; pointer-events:none;}
+  .ctlBtn{
+    pointer-events:auto;
+    width:58px; height:58px; border-radius:50%;
+    background:var(--panel-bg); border:1px solid rgba(255,255,255,0.12);
+    color:var(--ink); display:flex; align-items:center; justify-content:center;
+    font-size:22px; font-weight:600; user-select:none; -webkit-user-select:none;
+    backdrop-filter:blur(6px);
+  }
+  .ctlBtn.big{width:74px;height:74px;font-size:15px; font-family:'JetBrains Mono',monospace; letter-spacing:0.02em;}
+  .ctlBtn.drift{width:50px;height:50px;font-size:11px;font-family:'JetBrains Mono',monospace;background:rgba(176,72,58,0.35);}
+  .ctlBtn:active, .ctlBtn.active{background:rgba(176,72,58,0.55); border-color:rgba(255,255,255,0.3);}
+
+  #hint{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    color:var(--ink); text-align:center; pointer-events:none;
+    font-size:13px; color:var(--ink-dim); letter-spacing:0.01em;
+    animation:fadeOut 4.5s ease forwards;
+  }
+  #hint b{color:var(--ink); display:block; font-size:20px; font-weight:700; margin-bottom:6px;}
+  @keyframes fadeOut{ 0%{opacity:1;} 80%{opacity:1;} 100%{opacity:0; visibility:hidden;} }
+
+  #overlay{
+    position:absolute; inset:0; background:rgba(15,16,17,0.78);
+    display:none; align-items:center; justify-content:center;
+    backdrop-filter:blur(3px);
+  }
+  #overlay.show{display:flex;}
+  #panel{
+    background:#1c1e20; border:1px solid rgba(255,255,255,0.08);
+    border-radius:14px; padding:28px 34px; text-align:center; min-width:260px;
+    box-shadow:0 20px 60px rgba(0,0,0,0.5);
+  }
+  #panel h2{color:var(--ink); margin:0 0 4px; font-size:19px; font-weight:700;}
+  #panel p{color:var(--ink-dim); margin:0 0 18px; font-size:13px;}
+  .resultRow{display:flex; justify-content:space-between; font-family:'JetBrains Mono',monospace; color:var(--ink); font-size:14px; padding:6px 0; border-top:1px solid rgba(255,255,255,0.06);}
+  .resultRow span:first-child{color:var(--ink-dim);}
+  #restartBtn{
+    margin-top:18px; width:100%; padding:12px; border-radius:9px; border:none;
+    background:var(--accent); color:#fff; font-size:14px; font-weight:600;
+    cursor:pointer; font-family:'Inter',sans-serif;
+  }
+  #restartBtn:hover{background:#9c3d31;}
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c"></canvas>
+
+  <div id="hud">
+    <div class="stat"><span class="label">Speed</span><span class="value" id="hSpeed">0</span></div>
+    <div class="stat"><span class="label">Distance</span><span class="value" id="hDist">0m</span></div>
+    <div class="stat"><span class="label">Score</span><span class="value" id="hScore">0</span></div>
+    <div class="stat"><span class="label">Best</span><span class="value" id="hBest">0</span></div>
+  </div>
+  <div id="title">Ridgeline <b>— Drift &amp; Stunt Driver</b></div>
+  <div id="toastLayer"></div>
+
+  <div id="hint"><b>Get to the top of the ridge</b>Gas / brake to drive · tilt in the air to flip · hold drift to slide</div>
+
+  <div id="controls">
+    <div class="btnCluster">
+      <div class="ctlBtn" id="btnTiltL">◀</div>
+      <div class="ctlBtn" id="btnTiltR">▶</div>
+      <div class="ctlBtn drift" id="btnDrift">drift</div>
+    </div>
+    <div class="btnCluster">
+      <div class="ctlBtn big" id="btnBrake">brake</div>
+      <div class="ctlBtn big" id="btnGas">gas</div>
+    </div>
+  </div>
+
+  <div id="overlay">
+    <div id="panel">
+      <h2 id="panelTitle">Crashed</h2>
+      <p id="panelSub">The landing didn't go to plan.</p>
+      <div class="resultRow"><span>Distance</span><span id="rDist">0m</span></div>
+      <div class="resultRow"><span>Flips</span><span id="rFlips">0</span></div>
+      <div class="resultRow"><span>Score</span><span id="rScore">0</span></div>
+      <button id="restartBtn">Try again</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('c');
+  const ctx = canvas.getContext('2d');
+  const wrap = document.getElementById('wrap');
+  let dpr = Math.min(window.devicePixelRatio || 1, 2);
+  let W = 0, H = 0;
+
+  function resize(){
+    const r = wrap.getBoundingClientRect();
+    W = r.width; H = r.height;
+    canvas.width = Math.round(W*dpr);
+    canvas.height = Math.round(H*dpr);
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  // Ensure this game captures keyboard input immediately, and re-grabs it
+  // whenever the player clicks/taps anywhere in the game area.
+  wrap.tabIndex = 0;
+  wrap.style.outline = 'none';
+  wrap.addEventListener('pointerdown', ()=> wrap.focus());
+  window.addEventListener('load', ()=> wrap.focus());
+  setTimeout(()=> wrap.focus(), 50);
+
+  // ---------- Terrain ----------
+  const GROUND_BASE = 420;
+  let seed1, seed2, seed3, seed4;
+  function newTerrainSeed(){
+    seed1 = Math.random()*1000;
+    seed2 = Math.random()*1000;
+    seed3 = Math.random()*1000;
+    seed4 = Math.random()*1000;
+  }
+  newTerrainSeed();
+
+  function terrainY(x){
+    if (x < 260) return GROUND_BASE;
+    const t = x - 260;
+    const fade = Math.min(1, t/300);
+    return GROUND_BASE
+      - fade*(Math.sin(t*0.0085 + seed1)*46
+      + Math.sin(t*0.0032 + seed2)*92
+      + Math.sin(t*0.05  + seed3)*11
+      + Math.sin(t*0.0009+ seed4)*55);
+  }
+
+  // ---------- Input ----------
+  const input = { gas:false, brake:false, left:false, right:false, drift:false };
+
+  function bindHoldButton(el, key){
+    const down = (e)=>{ e.preventDefault(); input[key]=true; el.classList.add('active'); };
+    const up = (e)=>{ e.preventDefault(); input[key]=false; el.classList.remove('active'); };
+    el.addEventListener('pointerdown', down);
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointerleave', up);
+    el.addEventListener('pointercancel', up);
+  }
+  bindHoldButton(document.getElementById('btnGas'),'gas');
+  bindHoldButton(document.getElementById('btnBrake'),'brake');
+  bindHoldButton(document.getElementById('btnTiltL'),'left');
+  bindHoldButton(document.getElementById('btnTiltR'),'right');
+  bindHoldButton(document.getElementById('btnDrift'),'drift');
+
+  window.addEventListener('keydown', (e)=>{
+    switch(e.code){
+      case 'ArrowUp': case 'KeyW': input.gas=true; break;
+      case 'ArrowDown': case 'KeyS': input.brake=true; break;
+      case 'ArrowLeft': case 'KeyA': input.left=true; break;
+      case 'ArrowRight': case 'KeyD': input.right=true; break;
+      case 'Space': input.drift=true; e.preventDefault(); break;
+      case 'Enter': if (state.crashed) restart(); break;
+    }
+  });
+  window.addEventListener('keyup', (e)=>{
+    switch(e.code){
+      case 'ArrowUp': case 'KeyW': input.gas=false; break;
+      case 'ArrowDown': case 'KeyS': input.brake=false; break;
+      case 'ArrowLeft': case 'KeyA': input.left=false; break;
+      case 'ArrowRight': case 'KeyD': input.right=false; break;
+      case 'Space': input.drift=false; break;
+    }
+  });
+
+  // ---------- Game state ----------
+  const WB = 32;             // half wheelbase
+  const SUSP = 24;           // ride height above axle line
+  const GRAVITY = 1450;      // px/s^2
+  const ENGINE_A = 620;      // px/s^2
+  const REV_A = 380;
+  const AIR_TORQUE = 3.4;    // rad/s^2
+
+  let bestScore = 0;
+
+  function freshState(){
+    return {
+      x: 40, y: GROUND_BASE - SUSP,
+      vx: 0, vy: 0,
+      angle: 0, angVel: 0,
+      wheelSpin: 0,
+      grounded: true,
+      airborne: false,
+      airRotation: 0,
+      distance: 0,
+      score: 0,
+      flips: 0,
+      driftHeat: 0,
+      crashed: false,
+      particles: [],
+      camX: 0, camY: GROUND_BASE - H*0.55,
+    };
+  }
+  let state = freshState();
+
+  function toast(text){
+    const layer = document.getElementById('toastLayer');
+    const el = document.createElement('div');
+    el.className='toast'; el.textContent=text;
+    layer.appendChild(el);
+    setTimeout(()=>el.remove(), 1650);
+  }
+
+  function normalizeAngle(a){
+    while(a > Math.PI) a -= Math.PI*2;
+    while(a < -Math.PI) a += Math.PI*2;
+    return a;
+  }
+
+  function crash(){
+    if (state.crashed) return;
+    state.crashed = true;
+    bestScore = Math.max(bestScore, Math.round(state.score));
+    document.getElementById('rDist').textContent = Math.round(state.distance)+'m';
+    document.getElementById('rFlips').textContent = state.flips;
+    document.getElementById('rScore').textContent = Math.round(state.score);
+    document.getElementById('hBest').textContent = bestScore;
+    document.getElementById('overlay').classList.add('show');
+  }
+
+  function restart(){
+    const dist = Math.round(state.distance);
+    newTerrainSeed();
+    state = freshState();
+    document.getElementById('overlay').classList.remove('show');
+  }
+  document.getElementById('restartBtn').addEventListener('click', restart);
+
+  // ---------- Update ----------
+  let last = performance.now();
+  function update(dt){
+    if (state.crashed) return;
+    dt = Math.min(dt, 1/30);
+
+    const frontX = state.x + WB*Math.cos(state.angle);
+    const rearX  = state.x - WB*Math.cos(state.angle);
+    const frontGY = terrainY(frontX);
+    const rearGY  = terrainY(rearX);
+    const targetAngle = Math.atan2(frontGY - rearGY, WB*2);
+    const targetY = (frontGY + rearGY)/2 - SUSP;
+
+    const wasAirborne = state.airborne;
+
+    // gravity + integrate
+    state.vy += GRAVITY*dt;
+    state.x += state.vx*dt;
+    state.y += state.vy*dt;
+    state.angle = normalizeAngle(state.angle + state.angVel*dt);
+
+    if (state.y >= targetY){
+      // grounded / landing
+      if (wasAirborne){
+        const angleDiff = Math.abs(normalizeAngle(state.angle - targetAngle));
+        if (angleDiff > 1.05){
+          state.y = targetY;
+          crash();
+          return;
+        }
+        // landed decently
+        const flips = Math.floor(Math.abs(state.airRotation)/(Math.PI*2));
+        if (flips > 0){
+          state.flips += flips;
+          state.score += flips*180;
+          toast((flips>1? flips+'x FLIP  +'+(flips*180) : 'FLIP  +180'));
+        }
+        state.airRotation = 0;
+      }
+      state.airborne = false;
+      state.grounded = true;
+      state.y = state.y*0.55 + targetY*0.45;
+      state.vy *= -0.06;
+      state.angle = normalizeAngle(state.angle*0.7 + targetAngle*0.3);
+      state.angVel *= 0.4;
+
+      const fwdX = Math.cos(state.angle);
+
+      if (input.drift){
+        state.vx *= Math.pow(0.90, dt*60);
+        if (Math.abs(state.vx) > 140){
+          state.driftHeat += dt;
+          state.score += Math.abs(state.vx)*dt*0.6;
+          if (Math.random() < 0.9){
+            state.particles.push({
+              x: rearX, y: rearGY, vx:(Math.random()-0.5)*40 - state.vx*0.1, vy:-Math.random()*40,
+              life: 0.5+Math.random()*0.3, age:0
+            });
+          }
+        }
+      } else {
+        state.driftHeat = 0;
+      }
+
+      if (input.gas){
+        state.vx += fwdX*ENGINE_A*dt;
+        state.wheelSpin += 8*dt;
+      } else if (input.brake){
+        if (Math.abs(state.vx) < 30){
+          state.vx -= fwdX*REV_A*dt;
+        } else {
+          state.vx *= Math.pow(0.90, dt*60);
+        }
+      }
+      state.vx *= Math.pow(0.995, dt*60);
+      state.wheelSpin += state.vx*dt*0.02;
+    } else {
+      state.airborne = true;
+      state.grounded = false;
+      state.airRotation += state.angVel*dt;
+      if (input.left)  state.angVel -= AIR_TORQUE*dt;
+      if (input.right) state.angVel += AIR_TORQUE*dt;
+      state.angVel *= Math.pow(0.995, dt*60);
+      state.wheelSpin += state.vx*dt*0.02;
+    }
+
+    if (state.x < 20){ state.x = 20; if(state.vx<0) state.vx = 0; }
+
+    state.distance = Math.max(state.distance, (state.x-40)/16);
+    state.score = Math.max(state.score, state.distance*1.0 + state.flips*180);
+
+    // particles
+    for (let i=state.particles.length-1;i>=0;i--){
+      const p = state.particles[i];
+      p.age += dt;
+      p.x += p.vx*dt; p.y += p.vy*dt; p.vy += 300*dt;
+      if (p.age > p.life) state.particles.splice(i,1);
+    }
+
+    // camera
+    const targetCamX = state.x - W*0.34;
+    const targetCamY = state.y - H*0.56;
+    state.camX += (targetCamX-state.camX)*Math.min(1, dt*4.5);
+    state.camY += (targetCamY-state.camY)*Math.min(1, dt*3.2);
+
+    // HUD
+    document.getElementById('hSpeed').textContent = Math.round(Math.abs(state.vx)/10);
+    document.getElementById('hDist').textContent = Math.round(state.distance)+'m';
+    document.getElementById('hScore').textContent = Math.round(state.score);
+    document.getElementById('hBest').textContent = bestScore;
+  }
+
+  // ---------- Render ----------
+  function render(){
+    // sky
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0, getCSS('--sky-top'));
+    g.addColorStop(1, getCSS('--sky-bottom'));
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+
+    // far parallax ridge
+    ctx.beginPath();
+    ctx.moveTo(0,H);
+    const parX = state.camX*0.35;
+    for (let sx=0; sx<=W; sx+=24){
+      const wx = sx + parX;
+      const y = GROUND_BASE - 140 - Math.sin(wx*0.0035+seed2)*40 - state.camY*0.35;
+      ctx.lineTo(sx, y);
+    }
+    ctx.lineTo(W,H); ctx.closePath();
+    ctx.fillStyle = '#b7c1c8';
+    ctx.globalAlpha = 0.55;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+
+    // ground
+    ctx.beginPath();
+    ctx.moveTo(0,H);
+    const step = 8;
+    let pts = [];
+    for (let sx=-step; sx<=W+step; sx+=step){
+      const wx = sx + state.camX;
+      const wy = terrainY(wx) - state.camY;
+      pts.push([sx,wy]);
+    }
+    ctx.moveTo(pts[0][0], H);
+    ctx.lineTo(pts[0][0], pts[0][1]);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.lineTo(pts[pts.length-1][0], H);
+    ctx.closePath();
+    const gg = ctx.createLinearGradient(0,H*0.35,0,H);
+    gg.addColorStop(0,'#6b5a44');
+    gg.addColorStop(1,'#231d17');
+    ctx.fillStyle = gg;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i=1;i<pts.length;i++) ctx.lineTo(pts[i][0], pts[i][1]);
+    ctx.strokeStyle = '#a4906c';
+    ctx.lineWidth = 3;
+    ctx.stroke();
+
+    // particles
+    for (const p of state.particles){
+      const a = 1 - p.age/p.life;
+      ctx.beginPath();
+      ctx.arc(p.x-state.camX, p.y-state.camY, 2.2, 0, Math.PI*2);
+      ctx.fillStyle = `rgba(230,220,205,${a*0.7})`;
+      ctx.fill();
+    }
+
+    // car
+    drawCar();
+  }
+
+  function getCSS(v){
+    return getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+  }
+
+  function drawCar(){
+    const sx = state.x - state.camX;
+    const sy = state.y - state.camY;
+    ctx.save();
+    ctx.translate(sx, sy);
+    ctx.rotate(state.angle);
+
+    // wheels (rendered in local space before further rotation, offset along local x)
+    drawWheel(-WB, SUSP, state.wheelSpin);
+    drawWheel(WB, SUSP, state.wheelSpin);
+
+    // body
+    ctx.beginPath();
+    const bw = WB*2+10, bh = 26;
+    roundRect(-bw/2, -bh/2 - 6, bw, bh, 7);
+    ctx.fillStyle = '#7a3226';
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // cabin
+    ctx.beginPath();
+    roundRect(-WB*0.42, -bh/2-16, WB*1.05, 16, 6);
+    ctx.fillStyle = '#2c333a';
+    ctx.fill();
+
+    // accent stripe
+    ctx.beginPath();
+    ctx.moveTo(-bw/2+4, -bh/2+2);
+    ctx.lineTo(bw/2-4, -bh/2+2);
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    ctx.restore();
+  }
+
+  function drawWheel(lx, ly, spin){
+    ctx.save();
+    ctx.translate(lx, ly);
+    ctx.beginPath();
+    ctx.arc(0,0,13,0,Math.PI*2);
+    ctx.fillStyle = '#17181a';
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(0,0,6,0,Math.PI*2);
+    ctx.fillStyle = '#5b6167';
+    ctx.fill();
+    ctx.rotate(spin);
+    ctx.beginPath();
+    ctx.moveTo(-9,0); ctx.lineTo(9,0);
+    ctx.moveTo(0,-9); ctx.lineTo(0,9);
+    ctx.strokeStyle = '#3d4145';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function roundRect(x,y,w,h,r){
+    ctx.moveTo(x+r,y);
+    ctx.arcTo(x+w,y,x+w,y+h,r);
+    ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r);
+    ctx.arcTo(x,y,x+w,y,r);
+    ctx.closePath();
+  }
+
+  function loop(now){
+    const dt = (now-last)/1000;
+    last = now;
+    update(dt);
+    render();
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame((t)=>{ last=t; requestAnimationFrame(loop); });
+})();
+</script>
+</body>
+</html>
